@@ -10,9 +10,9 @@
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
 template <const int BM, const int BN, const int BK, const int TM>
-__global__ void sgemm1DBlocktiling(int M, int N, int K, float alpha,
-                                   const float *A, const float *B, float beta,
-                                   float *C) {
+__global__ void sgemm1DBlocktiling(int M, int N, int K, double alpha,
+                                   const double *A, const double *B, double beta,
+                                   double *C) {
   // If we flip x and y here we get ~30% less performance for large matrices.
   // The current, 30% faster configuration ensures that blocks with sequential
   // blockIDs access columns of B sequentially, while sharing the same row of A.
@@ -27,8 +27,8 @@ __global__ void sgemm1DBlocktiling(int M, int N, int K, float alpha,
   const int threadRow = threadIdx.x / BN;
 
   // allocate space for the current blocktile in SMEM
-  __shared__ float As[BM * BK];
-  __shared__ float Bs[BK * BN];
+  __shared__ double As[BM * BK];
+  __shared__ double Bs[BK * BN];
 
   // Move blocktile to beginning of A's row and B's column
   A += cRow * BM * K;
@@ -45,7 +45,7 @@ __global__ void sgemm1DBlocktiling(int M, int N, int K, float alpha,
   const uint innerRowB = threadIdx.x / BN;
 
   // allocate thread-local cache for results in registerfile
-  float threadResults[TM] = {0.0};
+  double threadResults[TM] = {0.0};
 
   // outer loop over block tiles
   for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
@@ -62,7 +62,7 @@ __global__ void sgemm1DBlocktiling(int M, int N, int K, float alpha,
     for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
       // we make the dotproduct loop the outside loop, which facilitates
       // reuse of the Bs entry, which we can cache in a tmp var.
-      float tmpB = Bs[dotIdx * BN + threadCol];
+      double tmpB = Bs[dotIdx * BN + threadCol];
       for (uint resIdx = 0; resIdx < TM; ++resIdx) {
         threadResults[resIdx] +=
             As[(threadRow * TM + resIdx) * BK + dotIdx] * tmpB;

@@ -10,9 +10,9 @@
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
 template <const int BM, const int BN, const int BK, const int TM, const int TN>
-__global__ void sgemmResolveBankConflicts(int M, int N, int K, float alpha,
-                                          float *A, float *B, float beta,
-                                          float *C) {
+__global__ void sgemmResolveBankConflicts(int M, int N, int K, double alpha,
+                                          double *A, double *B, double beta,
+                                          double *C) {
   const uint cRow = blockIdx.y;
   const uint cCol = blockIdx.x;
 
@@ -21,8 +21,8 @@ __global__ void sgemmResolveBankConflicts(int M, int N, int K, float alpha,
   const int threadRow = threadIdx.x / (BN / TN);
 
   // allocate space for the current blocktile in smem
-  __shared__ float As[BM * BK];
-  __shared__ float Bs[BK * BN];
+  __shared__ double As[BM * BK];
+  __shared__ double Bs[BK * BN];
 
   // Move blocktile to beginning of A's row and B's column
   A += cRow * BM * K;
@@ -37,23 +37,23 @@ __global__ void sgemmResolveBankConflicts(int M, int N, int K, float alpha,
   const uint innerColB = threadIdx.x % (BN / 4);
 
   // allocate thread-local cache for results in registerfile
-  float threadResults[TM * TN] = {0.0};
-  float regM[TM] = {0.0};
-  float regN[TN] = {0.0};
+  double threadResults[TM * TN] = {0.0};
+  double regM[TM] = {0.0};
+  double regN[TN] = {0.0};
 
   // outer-most loop over block tiles
   for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
     // populate the SMEM caches
     // transpose A while loading it
-    float4 tmp =
-        reinterpret_cast<float4 *>(&A[innerRowA * K + innerColA * 4])[0];
+    double4 tmp =
+        reinterpret_cast<double4 *>(&A[innerRowA * K + innerColA * 4])[0];
     As[(innerColA * 4 + 0) * BM + innerRowA] = tmp.x;
     As[(innerColA * 4 + 1) * BM + innerRowA] = tmp.y;
     As[(innerColA * 4 + 2) * BM + innerRowA] = tmp.z;
     As[(innerColA * 4 + 3) * BM + innerRowA] = tmp.w;
 
     // "linearize" Bs while storing it
-    tmp = reinterpret_cast<float4 *>(&B[innerRowB * N + innerColB * 4])[0];
+    tmp = reinterpret_cast<double4 *>(&B[innerRowB * N + innerColB * 4])[0];
     Bs[((innerColB % 2) * 4 + innerRowB * 8 + 0) * 16 + innerColB / 2] = tmp.x;
     Bs[((innerColB % 2) * 4 + innerRowB * 8 + 1) * 16 + innerColB / 2] = tmp.y;
     Bs[((innerColB % 2) * 4 + innerRowB * 8 + 2) * 16 + innerColB / 2] = tmp.z;
@@ -87,7 +87,7 @@ __global__ void sgemmResolveBankConflicts(int M, int N, int K, float alpha,
   for (uint resIdxM = 0; resIdxM < TM; resIdxM += 1) {
     for (uint resIdxN = 0; resIdxN < TN; resIdxN += 4) {
       // load C vector into registers
-      float4 tmp = reinterpret_cast<float4 *>(
+      double4 tmp = reinterpret_cast<double4 *>(
           &C[(threadRow * TM + resIdxM) * N + threadCol * TN + resIdxN])[0];
       // perform GEMM update in reg
       tmp.x = alpha * threadResults[resIdxM * TN + resIdxN] + beta * tmp.x;
@@ -95,7 +95,7 @@ __global__ void sgemmResolveBankConflicts(int M, int N, int K, float alpha,
       tmp.z = alpha * threadResults[resIdxM * TN + resIdxN + 2] + beta * tmp.z;
       tmp.w = alpha * threadResults[resIdxM * TN + resIdxN + 3] + beta * tmp.w;
       // write back
-      reinterpret_cast<float4 *>(
+      reinterpret_cast<double4 *>(
           &C[(threadRow * TM + resIdxM) * N + threadCol * TN + resIdxN])[0] =
           tmp;
     }

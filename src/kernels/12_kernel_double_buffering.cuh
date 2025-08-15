@@ -14,33 +14,33 @@
 namespace {
 template <const int BM, const int BN, const int BK, const int rowStrideA,
           const int rowStrideB, typename T>
-__device__ void loadFromGmem(int N, int K, float *A, float *B, float *As,
-                             float *Bs, int innerRowA, int innerColA,
+__device__ void loadFromGmem(int N, int K, double *A, double *B, double *As,
+                             double *Bs, int innerRowA, int innerColA,
                              int innerRowB, int innerColB, T &barrier) {
 
   for (uint offset = 0; offset + rowStrideA <= BM; offset += rowStrideA) {
     cuda::memcpy_async(&As[(innerColA * 4 + 0) * BM + innerRowA + offset],
                        &A[(innerRowA + offset) * K + innerColA * 4],
-                       cuda::aligned_size_t<sizeof(float)>(sizeof(float)),
+                       cuda::aligned_size_t<sizeof(double)>(sizeof(double)),
                        barrier);
     cuda::memcpy_async(&As[(innerColA * 4 + 1) * BM + innerRowA + offset],
                        &A[(innerRowA + offset) * K + innerColA * 4 + 1],
-                       cuda::aligned_size_t<sizeof(float)>(sizeof(float)),
+                       cuda::aligned_size_t<sizeof(double)>(sizeof(double)),
                        barrier);
     cuda::memcpy_async(&As[(innerColA * 4 + 2) * BM + innerRowA + offset],
                        &A[(innerRowA + offset) * K + innerColA * 4 + 2],
-                       cuda::aligned_size_t<sizeof(float)>(sizeof(float)),
+                       cuda::aligned_size_t<sizeof(double)>(sizeof(double)),
                        barrier);
     cuda::memcpy_async(&As[(innerColA * 4 + 3) * BM + innerRowA + offset],
                        &A[(innerRowA + offset) * K + innerColA * 4 + 3],
-                       cuda::aligned_size_t<sizeof(float)>(sizeof(float)),
+                       cuda::aligned_size_t<sizeof(double)>(sizeof(double)),
                        barrier);
   }
 
   for (uint offset = 0; offset + rowStrideB <= BK; offset += rowStrideB) {
     cuda::memcpy_async(&Bs[(innerRowB + offset) * BN + innerColB * 4],
                        &B[(innerRowB + offset) * N + innerColB * 4],
-                       cuda::aligned_size_t<sizeof(float4)>(sizeof(float4)),
+                       cuda::aligned_size_t<sizeof(double4)>(sizeof(double4)),
                        barrier);
   }
 }
@@ -49,8 +49,8 @@ template <const int BM, const int BN, const int BK, const int WM, const int WN,
           const int WMITER, const int WNITER, const int WSUBM, const int WSUBN,
           const int TM, const int TN>
 __device__ void
-processFromSmem(float *regM, float *regN, float *threadResults, const float *As,
-                const float *Bs, const uint warpRow, const uint warpCol,
+processFromSmem(double *regM, double *regN, double *threadResults, const double *As,
+                const double *Bs, const uint warpRow, const uint warpCol,
                 const uint threadRowInWarp, const uint threadColInWarp) {
   for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
     // populate registers for whole warptile
@@ -102,8 +102,8 @@ processFromSmem(float *regM, float *regN, float *threadResults, const float *As,
 template <const int BM, const int BN, const int BK, const int WM, const int WN,
           const int WNITER, const int TM, const int TN, const int NUM_THREADS>
 __global__ void __launch_bounds__(NUM_THREADS)
-    runSgemmDoubleBuffering2(int M, int N, int K, float alpha, float *A,
-                             float *B, float beta, float *C) {
+    runSgemmDoubleBuffering2(int M, int N, int K, double alpha, double *A,
+                             double *B, double beta, double *C) {
   auto block = cooperative_groups::this_thread_block();
   __shared__ cuda::barrier<cuda::thread_scope::thread_scope_block> frontBarrier;
   __shared__ cuda::barrier<cuda::thread_scope::thread_scope_block> backBarrier;
@@ -134,8 +134,8 @@ __global__ void __launch_bounds__(NUM_THREADS)
   const uint threadRowInWarp = threadIdxInWarp / (WSUBN / TN); // i/4
 
   // allocate space for the current blocktile in SMEM
-  __shared__ float As[2 * BM * BK];
-  __shared__ float Bs[2 * BK * BN];
+  __shared__ double As[2 * BM * BK];
+  __shared__ double Bs[2 * BK * BN];
 
   // Move blocktile to beginning of A's row and B's column
   A += cRow * BM * K;
@@ -153,10 +153,10 @@ __global__ void __launch_bounds__(NUM_THREADS)
   constexpr uint rowStrideB = NUM_THREADS / (BN / 4);
 
   // allocate thread-local cache for results in registerfile
-  float threadResults[WMITER * TM * WNITER * TN] = {0.0};
+  double threadResults[WMITER * TM * WNITER * TN] = {0.0};
   // we cache into registers on the warptile level
-  float regM[WMITER * TM] = {0.0};
-  float regN[WNITER * TN] = {0.0};
+  double regM[WMITER * TM] = {0.0};
+  double regN[WNITER * TN] = {0.0};
 
   int As_offset = 0;
   int Bs_offset = 0;
@@ -204,11 +204,11 @@ __global__ void __launch_bounds__(NUM_THREADS)
   for (uint wSubRowIdx = 0; wSubRowIdx < WMITER; ++wSubRowIdx) {
     for (uint wSubColIdx = 0; wSubColIdx < WNITER; ++wSubColIdx) {
       // move C pointer to current warp subtile
-      float *C_interim = C + (wSubRowIdx * WSUBM) * N + wSubColIdx * WSUBN;
+      double *C_interim = C + (wSubRowIdx * WSUBM) * N + wSubColIdx * WSUBN;
       for (uint resIdxM = 0; resIdxM < TM; resIdxM += 1) {
         for (uint resIdxN = 0; resIdxN < TN; resIdxN += 4) {
           // load C vector into registers
-          float4 tmp = reinterpret_cast<float4 *>(
+          double4 tmp = reinterpret_cast<double4 *>(
               &C_interim[(threadRowInWarp * TM + resIdxM) * N +
                          threadColInWarp * TN + resIdxN])[0];
           // perform GEMM update in reg
@@ -219,7 +219,7 @@ __global__ void __launch_bounds__(NUM_THREADS)
           tmp.z = alpha * threadResults[i + 2] + beta * tmp.z;
           tmp.w = alpha * threadResults[i + 3] + beta * tmp.w;
           // write back
-          reinterpret_cast<float4 *>(
+          reinterpret_cast<double4 *>(
               &C_interim[(threadRowInWarp * TM + resIdxM) * N +
                          threadColInWarp * TN + resIdxN])[0] = tmp;
         }

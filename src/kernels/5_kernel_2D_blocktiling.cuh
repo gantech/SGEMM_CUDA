@@ -11,8 +11,8 @@
 
 template <const int BM, const int BN, const int BK, const int TM, const int TN>
 __global__ void __launch_bounds__((BM * BN) / (TM * TN), 1)
-    sgemm2DBlocktiling(int M, int N, int K, float alpha, const float *A,
-                       const float *B, float beta, float *C) {
+    sgemm2DBlocktiling(int M, int N, int K, double alpha, const double *A,
+                       const double *B, double beta, double *C) {
   const uint cRow = blockIdx.y;
   const uint cCol = blockIdx.x;
 
@@ -28,8 +28,8 @@ __global__ void __launch_bounds__((BM * BN) / (TM * TN), 1)
   const int threadRow = threadIdx.x / (BN / TN);
 
   // allocate space for the current blocktile in smem
-  __shared__ float As[BM * BK];
-  __shared__ float Bs[BK * BN];
+  __shared__ double As[BM * BK];
+  __shared__ double Bs[BK * BN];
 
   // Move blocktile to beginning of A's row and B's column
   A += cRow * BM * K;
@@ -50,10 +50,10 @@ __global__ void __launch_bounds__((BM * BN) / (TM * TN), 1)
   const uint strideB = numThreadsBlocktile / BN;
 
   // allocate thread-local cache for results in registerfile
-  float threadResults[TM * TN] = {0.0};
+  double threadResults[TM * TN] = {0.0};
   // register caches for As and Bs
-  float regM[TM] = {0.0};
-  float regN[TN] = {0.0};
+  double regM[TM] = {0.0};
+  double regN[TN] = {0.0};
 
   // outer-most loop over block tiles
   for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {

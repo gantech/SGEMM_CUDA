@@ -51,32 +51,32 @@ void CudaDeviceInfo() {
          props.multiProcessorCount, props.warpSize);
 };
 
-void randomize_matrix(float *mat, int N) {
+void randomize_matrix(double *mat, int N) {
   // NOTICE: Use gettimeofday instead of srand((unsigned)time(NULL)); the time
   // precision is too low and the same random number is generated.
   struct timeval time {};
   gettimeofday(&time, nullptr);
   srand(time.tv_usec);
   for (int i = 0; i < N; i++) {
-    float tmp = (float)(rand() % 5) + 0.01 * (rand() % 5);
+    double tmp = (double)(rand() % 5) + 0.01 * (rand() % 5);
     tmp = (rand() % 2 == 0) ? tmp : tmp * (-1.);
     mat[i] = tmp;
   }
 }
 
-void range_init_matrix(float *mat, int N) {
+void range_init_matrix(double *mat, int N) {
   for (int i = 0; i < N; i++) {
     mat[i] = i;
   }
 }
 
-void zero_init_matrix(float *mat, int N) {
+void zero_init_matrix(double *mat, int N) {
   for (int i = 0; i < N; i++) {
     mat[i] = 0.0;
   }
 }
 
-void copy_matrix(const float *src, float *dest, int N) {
+void copy_matrix(const double *src, double *dest, int N) {
   int i;
   for (i = 0; src + i && dest + i && i < N; i++)
     *(dest + i) = *(src + i);
@@ -84,10 +84,10 @@ void copy_matrix(const float *src, float *dest, int N) {
     printf("copy failed at %d while there are %d elements in total.\n", i, N);
 }
 
-void print_matrix(const float *A, int M, int N, std::ofstream &fs) {
+void print_matrix(const double *A, int M, int N, std::ofstream &fs) {
   int i;
   fs << std::setprecision(2)
-     << std::fixed; // Set floating-point precision and fixed notation
+     << std::fixed; // Set doubleing-point precision and fixed notation
   fs << "[";
   for (i = 0; i < M * N; i++) {
     if ((i + 1) % N == 0)
@@ -102,7 +102,7 @@ void print_matrix(const float *A, int M, int N, std::ofstream &fs) {
   fs << "]\n";
 }
 
-bool verify_matrix(float *matRef, float *matOut, int N) {
+bool verify_matrix(double *matRef, double *matOut, int N) {
   double diff = 0.0;
   int i;
   for (i = 0; i < N; i++) {
@@ -149,23 +149,23 @@ void runCublasTF32(cublasHandle_t handle, int M, int N, int K, float alpha,
                CUBLAS_COMPUTE_32F_FAST_TF32, CUBLAS_GEMM_DEFAULT_TENSOR_OP);
 }
 
-void run_sgemm_naive(int M, int N, int K, float alpha, float *A, float *B,
-                     float beta, float *C) {
+void run_sgemm_naive(int M, int N, int K, double alpha, double *A, double *B,
+                     double beta, double *C) {
   dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
   dim3 blockDim(32, 32);
   sgemm_naive<<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
-void run_sgemm_coalesce(int M, int N, int K, float alpha, float *A, float *B,
-                        float beta, float *C) {
+void run_sgemm_coalesce(int M, int N, int K, double alpha, double *A, double *B,
+                        double beta, double *C) {
   dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
   dim3 blockDim(32 * 32);
   sgemm_global_mem_coalesce<32>
       <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
-void run_sgemm_shared_mem_block(int M, int N, int K, float alpha, float *A,
-                                float *B, float beta, float *C) {
+void run_sgemm_shared_mem_block(int M, int N, int K, double alpha, double *A,
+                                double *B, double beta, double *C) {
   dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
   dim3 blockDim(32 * 32);
   // L1 cache becomes useless, since we access GMEM only via SMEM, so we carve
@@ -178,8 +178,8 @@ void run_sgemm_shared_mem_block(int M, int N, int K, float alpha, float *A,
       <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
-void runSgemm1DBlocktiling(int M, int N, int K, float alpha, float *A, float *B,
-                           float beta, float *C) {
+void runSgemm1DBlocktiling(int M, int N, int K, double alpha, double *A, double *B,
+                           double beta, double *C) {
   const uint BM = 64;
   const uint BN = 64;
   const uint BK = 8;
@@ -190,8 +190,8 @@ void runSgemm1DBlocktiling(int M, int N, int K, float alpha, float *A, float *B,
       <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
-void runSgemm2DBlocktiling(int M, int N, int K, float alpha, float *A, float *B,
-                           float beta, float *C) {
+void runSgemm2DBlocktiling(int M, int N, int K, double alpha, double *A, double *B,
+                           double beta, double *C) {
   const uint BK = 8;
   const uint TM = 8;
   const uint TN = 8;
@@ -214,8 +214,8 @@ void runSgemm2DBlocktiling(int M, int N, int K, float alpha, float *A, float *B,
   }
 }
 
-void runSgemmVectorize(int M, int N, int K, float alpha, float *A, float *B,
-                       float beta, float *C) {
+void runSgemmVectorize(int M, int N, int K, double alpha, double *A, double *B,
+                       double beta, double *C) {
   const uint BK = 8;
   const uint TM = 8;
   const uint TN = 8;
@@ -238,8 +238,8 @@ void runSgemmVectorize(int M, int N, int K, float alpha, float *A, float *B,
   }
 }
 
-void runSgemmResolveBankConflicts(int M, int N, int K, float alpha, float *A,
-                                  float *B, float beta, float *C) {
+void runSgemmResolveBankConflicts(int M, int N, int K, double alpha, double *A,
+                                  double *B, double beta, double *C) {
   const uint BK = 8;
   const uint TM = 8;
   const uint TN = 8;
@@ -262,8 +262,8 @@ void runSgemmResolveBankConflicts(int M, int N, int K, float alpha, float *A,
   }
 }
 
-void runSgemmResolveBankExtraCol(int M, int N, int K, float alpha, float *A,
-                                 float *B, float beta, float *C) {
+void runSgemmResolveBankExtraCol(int M, int N, int K, double alpha, double *A,
+                                 double *B, double beta, double *C) {
   const uint BK = 8;
   const uint TM = 8;
   const uint TN = 8;
@@ -286,8 +286,8 @@ void runSgemmResolveBankExtraCol(int M, int N, int K, float alpha, float *A,
   }
 }
 
-void runSgemmAutotuned(int M, int N, int K, float alpha, float *A, float *B,
-                       float beta, float *C) {
+void runSgemmAutotuned(int M, int N, int K, double alpha, double *A, double *B,
+                       double beta, double *C) {
   // A100
   // const uint K9_BK = 16;
   // const uint K9_TM = 4;
@@ -328,8 +328,8 @@ void runSgemmAutotuned(int M, int N, int K, float alpha, float *A, float *B,
       <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
-void runSgemmWarptiling(int M, int N, int K, float alpha, float *A, float *B,
-                        float beta, float *C) {
+void runSgemmWarptiling(int M, int N, int K, double alpha, double *A, double *B,
+                        double beta, double *C) {
   // Settings for A100
   // const uint K10_NUM_THREADS = 128;
   // const uint K10_BN = 128;
@@ -389,8 +389,8 @@ void runSgemmWarptiling(int M, int N, int K, float alpha, float *A, float *B,
       <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
-void runSgemmDoubleBuffering(int M, int N, int K, float alpha, float *A,
-                             float *B, float beta, float *C) {
+void runSgemmDoubleBuffering(int M, int N, int K, double alpha, double *A,
+                             double *B, double beta, double *C) {
   // Settings for A100
   // const uint K11_NUM_THREADS = 256;
   // const uint K11_BN = 128;
@@ -450,8 +450,8 @@ void runSgemmDoubleBuffering(int M, int N, int K, float alpha, float *A,
       <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
-void runSgemmDoubleBuffering2(int M, int N, int K, float alpha, float *A,
-                              float *B, float beta, float *C) {
+void runSgemmDoubleBuffering2(int M, int N, int K, double alpha, double *A,
+                              double *B, double beta, double *C) {
   // Settings for A6000
   const uint K12_NUM_THREADS = 128;
   const uint K12_BN = 128;
@@ -501,12 +501,12 @@ void runSgemmDoubleBuffering2(int M, int N, int K, float alpha, float *A,
       <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
-void run_kernel(int kernel_num, int M, int N, int K, float alpha, float *A,
-                float *B, float beta, float *C, cublasHandle_t handle) {
+void run_kernel(int kernel_num, int M, int N, int K, double alpha, double *A,
+                double *B, double beta, double *C, cublasHandle_t handle) {
   switch (kernel_num) {
-  case 0:
-    runCublasFP32(handle, M, N, K, alpha, A, B, beta, C);
-    break;
+  // case 0:
+  //   runCublasFP32(handle, M, N, K, alpha, A, B, beta, C);
+  //   break;
   case 1:
     run_sgemm_naive(M, N, K, alpha, A, B, beta, C);
     break;

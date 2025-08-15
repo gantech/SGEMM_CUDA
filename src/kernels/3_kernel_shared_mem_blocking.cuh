@@ -9,17 +9,17 @@
 #define CEIL_DIV(M, N) (((M) + (N)-1) / (N))
 
 template <const int BLOCKSIZE>
-__global__ void sgemm_shared_mem_block(int M, int N, int K, float alpha,
-                                       const float *A, const float *B,
-                                       float beta, float *C) {
+__global__ void sgemm_shared_mem_block(int M, int N, int K, double alpha,
+                                       const double *A, const double *B,
+                                       double beta, double *C) {
   // the output block that we want to compute in this threadblock
   const uint cRow = blockIdx.x;
   const uint cCol = blockIdx.y;
 
   // allocate buffer for current block in fast shared mem
   // shared mem is shared between all threads in a block
-  __shared__ float As[BLOCKSIZE * BLOCKSIZE];
-  __shared__ float Bs[BLOCKSIZE * BLOCKSIZE];
+  __shared__ double As[BLOCKSIZE * BLOCKSIZE];
+  __shared__ double Bs[BLOCKSIZE * BLOCKSIZE];
 
   // the inner row & col that we're accessing in this thread
   const uint threadCol = threadIdx.x % BLOCKSIZE;
@@ -30,7 +30,7 @@ __global__ void sgemm_shared_mem_block(int M, int N, int K, float alpha,
   B += cCol * BLOCKSIZE;                        // row=0, col=cCol
   C += cRow * BLOCKSIZE * N + cCol * BLOCKSIZE; // row=cRow, col=cCol
 
-  float tmp = 0.0;
+  double tmp = 0.0;
   for (int bkIdx = 0; bkIdx < K; bkIdx += BLOCKSIZE) {
     // Have each thread load one of the elements in A & B
     // Make the threadCol (=threadIdx.x) the consecutive index

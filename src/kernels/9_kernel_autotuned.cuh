@@ -12,8 +12,8 @@ const int K9_NUM_THREADS = 256;
 
 template <const int BM, const int BN, const int BK, const int TM, const int TN>
 __global__ void __launch_bounds__(K9_NUM_THREADS)
-    sgemmAutotuned(int M, int N, int K, float alpha, float *A, float *B,
-                   float beta, float *C) {
+    sgemmAutotuned(int M, int N, int K, double alpha, double *A, double *B,
+                   double beta, double *C) {
   const uint cRow = blockIdx.y;
   const uint cCol = blockIdx.x;
 
@@ -29,8 +29,8 @@ __global__ void __launch_bounds__(K9_NUM_THREADS)
   const int threadRow = threadIdx.x / (WN / TN);
 
   // allocate space for the current blocktile in smem
-  __shared__ float As[BM * BK];
-  __shared__ float Bs[BK * BN];
+  __shared__ double As[BM * BK];
+  __shared__ double Bs[BK * BN];
 
   // Move blocktile to beginning of A's row and B's column
   A += cRow * BM * K;
@@ -47,15 +47,15 @@ __global__ void __launch_bounds__(K9_NUM_THREADS)
   constexpr uint rowStrideB = K9_NUM_THREADS / (BN / 4);
 
   // allocate thread-local cache for results in registerfile
-  float threadResults[WMITER * WNITER * TM * TN] = {0.0};
-  float regM[TM] = {0.0};
-  float regN[TN] = {0.0};
+  double threadResults[WMITER * WNITER * TM * TN] = {0.0};
+  double regM[TM] = {0.0};
+  double regN[TN] = {0.0};
 
   // outer-most loop over block tiles
   for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
     // populate the SMEM caches
     for (uint offset = 0; offset + rowStrideA <= BM; offset += rowStrideA) {
-      float4 tmp = reinterpret_cast<float4 *>(
+      double4 tmp = reinterpret_cast<double4 *>(
           &A[(innerRowA + offset) * K + innerColA * 4])[0];
       // transpose A while storing it
       As[(innerColA * 4 + 0) * BM + innerRowA + offset] = tmp.x;
@@ -65,9 +65,9 @@ __global__ void __launch_bounds__(K9_NUM_THREADS)
     }
 
     for (uint offset = 0; offset + rowStrideB <= BK; offset += rowStrideB) {
-      reinterpret_cast<float4 *>(
+      reinterpret_cast<double4 *>(
           &Bs[(innerRowB + offset) * BN + innerColB * 4])[0] =
-          reinterpret_cast<float4 *>(
+          reinterpret_cast<double4 *>(
               &B[(innerRowB + offset) * N + innerColB * 4])[0];
     }
     __syncthreads();
@@ -102,11 +102,11 @@ __global__ void __launch_bounds__(K9_NUM_THREADS)
   // write out the results
   for (uint wmIdx = 0; wmIdx < WMITER; ++wmIdx) {
     for (uint wnIdx = 0; wnIdx < WNITER; ++wnIdx) {
-      float *C_interim = C + (wmIdx * WM * N) + (wnIdx * WN);
+      double *C_interim = C + (wmIdx * WM * N) + (wnIdx * WN);
       for (uint resIdxM = 0; resIdxM < TM; resIdxM += 1) {
         for (uint resIdxN = 0; resIdxN < TN; resIdxN += 4) {
           // load C vector into registers
-          float4 tmp = reinterpret_cast<float4 *>(
+          double4 tmp = reinterpret_cast<double4 *>(
               &C_interim[(threadRow * TM + resIdxM) * N + threadCol * TN +
                          resIdxN])[0];
           // perform GEMM update in reg
@@ -117,7 +117,7 @@ __global__ void __launch_bounds__(K9_NUM_THREADS)
           tmp.z = alpha * threadResults[i + 2] + beta * tmp.z;
           tmp.w = alpha * threadResults[i + 3] + beta * tmp.w;
           // write back
-          reinterpret_cast<float4 *>(&C_interim[(threadRow * TM + resIdxM) * N +
+          reinterpret_cast<double4 *>(&C_interim[(threadRow * TM + resIdxM) * N +
                                                 threadCol * TN + resIdxN])[0] =
               tmp;
         }

@@ -13,13 +13,13 @@ const int WARPSIZE = 32; // warpSize is not constexpr
 namespace wt {
 template <const int BM, const int BN, const int BK, const int rowStrideA,
           const int rowStrideB>
-__device__ void loadFromGmem(int N, int K, const float *A, const float *B,
-                             float *As, float *Bs, int innerRowA, int innerColA,
+__device__ void loadFromGmem(int N, int K, const double *A, const double *B,
+                             double *As, double *Bs, int innerRowA, int innerColA,
                              int innerRowB, int innerColB) {
   for (uint offset = 0; offset + rowStrideA <= BM; offset += rowStrideA) {
-    const float4 tmp = reinterpret_cast<const float4 *>(
+    const double4 tmp = reinterpret_cast<const double4 *>(
         &A[(innerRowA + offset) * K + innerColA * 4])[0];
-    // float4 tmp;
+    // double4 tmp;
     // asm("ld.global.nc.v4.f32 {%0, %1, %2, %3}, [%4];"
     //     : "=f"(tmp.x), "=f"(tmp.y), "=f"(tmp.z), "=f"(tmp.w)
     //     : "l"(&A[(innerRowA + offset) * K + innerColA * 4]));
@@ -30,9 +30,9 @@ __device__ void loadFromGmem(int N, int K, const float *A, const float *B,
   }
 
   for (uint offset = 0; offset + rowStrideB <= BK; offset += rowStrideB) {
-    reinterpret_cast<float4 *>(
+    reinterpret_cast<double4 *>(
         &Bs[(innerRowB + offset) * BN + innerColB * 4])[0] =
-        reinterpret_cast<const float4 *>(
+        reinterpret_cast<const double4 *>(
             &B[(innerRowB + offset) * N + innerColB * 4])[0];
     // asm("ld.global.v4.f32 {%0, %1, %2, %3}, [%4];"
     //     : "=f"(Bs[(innerRowB + offset) * BN + innerColB * 4 + 0]),
@@ -47,8 +47,8 @@ template <const int BM, const int BN, const int BK, const int WM, const int WN,
           const int WMITER, const int WNITER, const int WSUBM, const int WSUBN,
           const int TM, const int TN>
 __device__ void
-processFromSmem(float *regM, float *regN, float *threadResults, const float *As,
-                const float *Bs, const uint warpRow, const uint warpCol,
+processFromSmem(double *regM, double *regN, double *threadResults, const double *As,
+                const double *Bs, const uint warpRow, const uint warpCol,
                 const uint threadRowInWarp, const uint threadColInWarp) {
   for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
     // populate registers for whole warptile
@@ -100,8 +100,8 @@ processFromSmem(float *regM, float *regN, float *threadResults, const float *As,
 template <const int BM, const int BN, const int BK, const int WM, const int WN,
           const int WNITER, const int TM, const int TN, const int NUM_THREADS>
 __global__ void __launch_bounds__(NUM_THREADS)
-    sgemmWarptiling(int M, int N, int K, float alpha, float *A, float *B,
-                    float beta, float *C) {
+    sgemmWarptiling(int M, int N, int K, double alpha, double *A, double *B,
+                    double beta, double *C) {
   const uint cRow = blockIdx.y;
   const uint cCol = blockIdx.x;
 
@@ -121,8 +121,8 @@ __global__ void __launch_bounds__(NUM_THREADS)
   const uint threadRowInWarp = threadIdxInWarp / (WSUBN / TN); // i/4
 
   // allocate space for the current blocktile in SMEM
-  __shared__ float As[BM * BK];
-  __shared__ float Bs[BK * BN];
+  __shared__ double As[BM * BK];
+  __shared__ double Bs[BK * BN];
 
   // Move blocktile to beginning of A's row and B's column
   A += cRow * BM * K;
@@ -140,10 +140,10 @@ __global__ void __launch_bounds__(NUM_THREADS)
   constexpr uint rowStrideB = NUM_THREADS / (BN / 4);
 
   // allocate thread-local cache for results in registerfile
-  float threadResults[WMITER * TM * WNITER * TN] = {0.0};
+  double threadResults[WMITER * TM * WNITER * TN] = {0.0};
   // we cache into registers on the warptile level
-  float regM[WMITER * TM] = {0.0};
-  float regN[WNITER * TN] = {0.0};
+  double regM[WMITER * TM] = {0.0};
+  double regN[WNITER * TN] = {0.0};
 
   // outer-most loop over block tiles
   for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
@@ -162,11 +162,11 @@ __global__ void __launch_bounds__(NUM_THREADS)
   for (uint wSubRowIdx = 0; wSubRowIdx < WMITER; ++wSubRowIdx) {
     for (uint wSubColIdx = 0; wSubColIdx < WNITER; ++wSubColIdx) {
       // move C pointer to current warp subtile
-      float *C_interim = C + (wSubRowIdx * WSUBM) * N + wSubColIdx * WSUBN;
+      double *C_interim = C + (wSubRowIdx * WSUBM) * N + wSubColIdx * WSUBN;
       for (uint resIdxM = 0; resIdxM < TM; resIdxM += 1) {
         for (uint resIdxN = 0; resIdxN < TN; resIdxN += 4) {
           // load C vector into registers
-          float4 tmp = reinterpret_cast<float4 *>(
+          double4 tmp = reinterpret_cast<double4 *>(
               &C_interim[(threadRowInWarp * TM + resIdxM) * N +
                          threadColInWarp * TN + resIdxN])[0];
           // perform GEMM update in reg
@@ -177,7 +177,7 @@ __global__ void __launch_bounds__(NUM_THREADS)
           tmp.z = alpha * threadResults[i + 2] + beta * tmp.z;
           tmp.w = alpha * threadResults[i + 3] + beta * tmp.w;
           // write back
-          reinterpret_cast<float4 *>(
+          reinterpret_cast<double4 *>(
               &C_interim[(threadRowInWarp * TM + resIdxM) * N +
                          threadColInWarp * TN + resIdxN])[0] = tmp;
         }
