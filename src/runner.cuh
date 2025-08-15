@@ -12,15 +12,15 @@ void cudaCheck(cudaError_t error, const char *file,
                int line); // CUDA error check
 void CudaDeviceInfo();    // print CUDA information
 
-void range_init_matrix(float *mat, int N);
-void randomize_matrix(float *mat, int N);
-void zero_init_matrix(float *mat, int N);
-void copy_matrix(const float *src, float *dest, int N);
-void print_matrix(const float *A, int M, int N, std::ofstream &fs);
-bool verify_matrix(float *mat1, float *mat2, int N);
+void range_init_matrix(double *mat, int N);
+void randomize_matrix(double *mat, int N);
+void zero_init_matrix(double *mat, int N);
+void copy_matrix(const double *src, double *dest, int N);
+void print_matrix(const double *A, int M, int N, std::ofstream &fs);
+bool verify_matrix(double *mat1, double *mat2, int N);
 
-float get_current_sec();                        // Get the current moment
-float cpu_elapsed_time(float &beg, float &end); // Calculate time difference
+double get_current_sec();                        // Get the current moment
+double cpu_elapsed_time(float &beg, float &end); // Calculate time difference
 
-void run_kernel(int kernel_num, int m, int n, int k, float alpha, float *A,
-                float *B, float beta, float *C, cublasHandle_t handle);
+void run_kernel(int kernel_num, int m, int n, int k, double alpha, double *A,
+                double *B, double beta, double *C, cublasHandle_t handle);
