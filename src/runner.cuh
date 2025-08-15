@@ -19,8 +19,8 @@ void copy_matrix(const double *src, double *dest, int N);
 void print_matrix(const double *A, int M, int N, std::ofstream &fs);
 bool verify_matrix(double *mat1, double *mat2, int N);
 
-double get_current_sec();                        // Get the current moment
-double cpu_elapsed_time(float &beg, float &end); // Calculate time difference
+float get_current_sec();                        // Get the current moment
+float cpu_elapsed_time(float &beg, float &end); // Calculate time difference
 
 void run_kernel(int kernel_num, int m, int n, int k, double alpha, double *A,
                 double *B, double beta, double *C, cublasHandle_t handle);
