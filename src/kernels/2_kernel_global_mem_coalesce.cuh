@@ -10,8 +10,8 @@ template <const uint BLOCKSIZE>
 __global__ void sgemm_global_mem_coalesce(int M, int N, int K, double alpha,
                                           const double *A, const double *B,
                                           double beta, double *C) {
-  const int cRow = blockIdx.x * BLOCKSIZE + (threadIdx.x / BLOCKSIZE);
-  const int cCol = blockIdx.y * BLOCKSIZE + (threadIdx.x % BLOCKSIZE);
+  const int cRow = blockIdx.x * BLOCKSIZE + threadIdx.y;
+  const int cCol = blockIdx.y * BLOCKSIZE + threadIdx.x;
 
   // if statement is necessary to make things work under tile quantization
   if (cRow < M && cCol < N) {
