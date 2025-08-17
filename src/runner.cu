@@ -121,6 +121,16 @@ int div_ceil(int numerator, int denominator) {
   return res.rem ? (res.quot + 1) : res.quot;
 }
 
+void runCublasFP64(cublasHandle_t handle, int M, int N, int K, double alpha,
+                   double *A, double *B, double beta, double *C) {
+  // cuBLAS uses column-major order. So we change the order of our row-major A &
+  // B, since (B^T*A^T)^T = (A*B)
+  // This runs cuBLAS in full fp64 mode
+  cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, M, K, &alpha, B, CUDA_R_64F, N,
+                A, CUDA_R_64F, K, &beta, C, CUDA_R_64F, N, CUBLAS_COMPUTE_64F,
+                CUBLAS_GEMM_DEFAULT_TENSOR_OP);
+}
+
 void runCublasFP32(cublasHandle_t handle, int M, int N, int K, float alpha,
                    float *A, float *B, float beta, float *C) {
   // cuBLAS uses column-major order. So we change the order of our row-major A &
@@ -445,9 +455,9 @@ void runSgemmDoubleBuffering(int M, int N, int K, double alpha, double *A,
                 "BN*BK must be a multiple of 4*256 to vectorize loads");
 
   dim3 gridDim(CEIL_DIV(N, K11_BN), CEIL_DIV(M, K11_BM));
-  sgemmDoubleBuffering<K11_BM, K11_BN, K11_BK, K11_WM, K11_WN, K11_WNITER,
-                       K11_TM, K11_TN, K11_NUM_THREADS>
-      <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
+  // sgemmDoubleBuffering<K11_BM, K11_BN, K11_BK, K11_WM, K11_WN, K11_WNITER,
+  //                      K11_TM, K11_TN, K11_NUM_THREADS>
+  //     <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
 void runSgemmDoubleBuffering2(int M, int N, int K, double alpha, double *A,
@@ -496,17 +506,17 @@ void runSgemmDoubleBuffering2(int M, int N, int K, double alpha, double *A,
                 "BN*BK must be a multiple of 4*256 to vectorize loads");
 
   dim3 gridDim(CEIL_DIV(N, K12_BN), CEIL_DIV(M, K12_BM));
-  runSgemmDoubleBuffering2<K12_BM, K12_BN, K12_BK, K12_WM, K12_WN, K12_WNITER,
-                           K12_TM, K12_TN, K12_NUM_THREADS>
-      <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
+  // runSgemmDoubleBuffering2<K12_BM, K12_BN, K12_BK, K12_WM, K12_WN, K12_WNITER,
+  //                          K12_TM, K12_TN, K12_NUM_THREADS>
+  //     <<<gridDim, blockDim>>>(M, N, K, alpha, A, B, beta, C);
 }
 
 void run_kernel(int kernel_num, int M, int N, int K, double alpha, double *A,
                 double *B, double beta, double *C, cublasHandle_t handle) {
   switch (kernel_num) {
-  // case 0:
-  //   runCublasFP32(handle, M, N, K, alpha, A, B, beta, C);
-  //   break;
+  case 0:
+    runCublasFP64(handle, M, N, K, alpha, A, B, beta, C);
+    break;
   case 1:
     run_sgemm_naive(M, N, K, alpha, A, B, beta, C);
     break;
@@ -546,4 +556,5 @@ void run_kernel(int kernel_num, int M, int N, int K, double alpha, double *A,
   default:
     throw std::invalid_argument("Unknown kernel number");
   }
+  
 }
